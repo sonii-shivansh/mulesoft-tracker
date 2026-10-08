@@ -42,6 +42,11 @@ NEGATIVE_TITLE = (
 SEARCHES = [
     ("MuleSoft India jobs", '"MuleSoft Developer" India 2 years jobs'),
     ("MuleSoft Integration India", '"MuleSoft" "Integration" India jobs'),
+    ("MuleSoft 2+ years", '"MuleSoft" "2+ years" India jobs'),
+    ("MuleSoft 3 years", '"MuleSoft Developer" "3 years" India jobs'),
+    ("Indeed MuleSoft", 'site:in.indeed.com "Mulesoft" India jobs'),
+    ("Glassdoor MuleSoft", 'site:glassdoor.co.in/Job "MuleSoft Developer" India'),
+    ("ZipRecruiter MuleSoft", 'site:ziprecruiter.in/jobs Mulesoft India'),
     ("Accenture MuleSoft", 'site:accenture.com/in-en/careers/jobdetails MuleSoft India'),
     ("Capgemini MuleSoft", 'site:careers.capgemini.com/job MuleSoft India'),
     ("Deloitte MuleSoft", 'site:deloitte.com "MuleSoft" India careers'),
@@ -63,6 +68,32 @@ def canonical(url: str) -> str:
         parsed = parsed._replace(netloc=parsed.netloc[4:])
     parsed = parsed._replace(fragment="", query="")
     return parsed.geturl().rstrip("/")
+
+def extract_bing(query):
+    try:
+        r = requests.get(
+            "https://www.bing.com/search",
+            params={"q": query, "count": 10},
+            headers=HEADERS,
+            timeout=20,
+        )
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        out = []
+        for item in soup.select("li.b_algo")[:10]:
+            a = item.select_one("h2 a")
+            if not a:
+                continue
+            href = canonical(a.get("href", ""))
+            title = a.get_text(" ", strip=True)
+            p = item.select_one(".b_caption p")
+            snippet = p.get_text(" ", strip=True) if p else ""
+            if href and title:
+                out.append({"url": href, "title": title, "snippet": snippet, "engine": "Bing"})
+        return out
+    except Exception as exc:
+        print(f"SOURCE_ERROR=Bing | {type(exc).__name__}: {exc}")
+        return []
 
 def extract_ddg(query):
     try:
@@ -86,7 +117,8 @@ def extract_ddg(query):
             if href and title:
                 out.append({"url": href, "title": title, "snippet": snippet})
         return out
-    except Exception:
+    except Exception as exc:
+        print(f"SOURCE_ERROR=DuckDuckGo | {type(exc).__name__}: {exc}")
         return []
 
 def infer_company(title, url, text):
@@ -212,8 +244,11 @@ def main():
     known = {canonical(j.get("url", "")) for j in jobs}
     candidates = []
 
+    source_results = 0
     for _, query in SEARCHES:
-        for item in extract_ddg(query):
+        items = extract_bing(query) + extract_ddg(query)
+        source_results += len(items)
+        for item in items:
             url = canonical(item["url"])
             if not url or url in known:
                 continue
@@ -231,9 +266,9 @@ def main():
                 "score": score,
                 "note": make_note(item["title"], text, score),
                 "url": url,
-                "source": "Public search result",
+                "source": f"Public search result ({item.get('engine', 'unknown')})",
             })
-        time.sleep(1)
+        time.sleep(0.5)
 
     best = {}
     for job in candidates:
@@ -250,6 +285,7 @@ def main():
     save_jobs(jobs)
     write_xlsx(jobs)
 
+    print(f"SEARCH_RESULTS={source_results}")
     print(f"NEW_JOBS={len(new_jobs)}")
     for j in new_jobs:
         print(f'- {j["company"]} | {j["title"]} | {j["score"]}/100 | {j["url"]}')
