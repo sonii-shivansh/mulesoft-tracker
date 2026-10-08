@@ -5,7 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
+    # GitHub schedules are best-effort; use two cadences to improve resilience.
     - cron: "*/5 * * * *"
+    - cron: "2 * * * *"
 
 permissions:
   contents: write
