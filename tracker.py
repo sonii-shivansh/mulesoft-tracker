@@ -60,6 +60,17 @@ def canonical(url: str) -> str:
     if not url:
         return ""
     url = unquote(url.strip())
+    parsed0 = urlparse(url)
+    if parsed0.netloc.endswith("bing.com") and parsed0.path.startswith("/ck/a"):
+        encoded = parse_qs(parsed0.query).get("u", [""])[0]
+        if encoded.startswith("a1"):
+            import base64
+            try:
+                padded = encoded[2:] + "=" * (-len(encoded[2:]) % 4)
+                url = base64.b64decode(padded).decode("utf-8", errors="ignore")
+            except Exception:
+                return ""
+    url = unquote(url.strip())
     parsed = urlparse(url)
     if parsed.netloc.endswith("google.com") and parsed.path == "/url":
         url = parse_qs(parsed.query).get("q", [""])[0]
@@ -88,7 +99,7 @@ def extract_bing(query):
             title = a.get_text(" ", strip=True)
             p = item.select_one(".b_caption p")
             snippet = p.get_text(" ", strip=True) if p else ""
-            if href and title:
+            if href and title and urlparse(href).netloc.lower() not in {"bing.com", "www.bing.com"}:
                 out.append({"url": href, "title": title, "snippet": snippet, "engine": "Bing"})
         return out
     except Exception as exc:
