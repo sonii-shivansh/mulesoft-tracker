@@ -31,7 +31,11 @@ jobs:
         run: python -m pip install --upgrade requests beautifulsoup4 openpyxl
 
       - name: Collect and update tracker
-        run: python tracker.py | tee tracker-output.txt
+        run: |
+          set -o pipefail
+          python tracker.py | tee tracker-output.txt
+          grep '^SEARCH_RESULTS=' tracker-output.txt || true
+          grep '^SOURCE_ERROR=' tracker-output.txt || true
 
       - name: Publish job summary
         run: |
