@@ -210,36 +210,25 @@ def save_jobs(jobs):
     )
 
 def write_xlsx(jobs):
-    if XLSX.exists():
-        wb = load_workbook(XLSX)
-        ws = wb.active
-    else:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "MuleSoft Jobs"
-        ws.append([
-            "Date & Time Found", "Company Name", "Job Title",
-            "Location / Remote Status", "Match Score / Relevance Note",
-            "Direct Application Link"
-        ])
-        for c in ws[1]:
-            c.font = Font(bold=True)
-            c.alignment = Alignment(horizontal="center", vertical="center")
-    existing = {
-        str(row[5].value).strip()
-        for row in ws.iter_rows(min_row=2)
-        if row[5].value
-    }
+    # Rebuild from jobs.json every run so removed/stale rows cannot persist.
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "MuleSoft Jobs"
+    ws.append([
+        "Date & Time Found", "Company Name", "Job Title",
+        "Location / Remote Status", "Match Score / Relevance Note",
+        "Direct Application Link"
+    ])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
     for job in jobs:
-        if job["url"] in existing:
-            continue
         ws.append([
             job["date_time_found"], job["company"], job["title"],
             job["location"],
             f'{job["score"]}/100 — {job["note"]}',
             job["url"],
         ])
-        existing.add(job["url"])
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
     widths = [22, 28, 42, 34, 75, 80]
